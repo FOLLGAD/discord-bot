@@ -1,43 +1,74 @@
-let discord = require('discord.js')
-let auth = require('./auth.json')
+const version = '0.1'
+
+const discord = require('discord.js')
+const fs = require('fs')
+let config = require('./config.json')
 
 // Initialize discord client
-let client = new discord.Client()
+const client = new discord.Client()
 
 client.on('ready', () => {
     console.log(`Logged in as ${client.user.tag}`)
 })
 
-// Prefix that beppe-bot will listen to
-const { prefix } = require('./config.json')
+function isAdmin(member) {
+    return config.adminRoles.some(role => member.roles.has(role))
+}
 
-client.on('message', ({ content, channel }) => {
+client.on('message', message => {
+    let { content, channel, member } = message
+
     let trimmedContent = content.trim()
-    if (trimmedContent.indexOf(prefix) === 0) {
-        let argsRaw = trimmedContent.substring(prefix.length).trim()
-        let args = argsRaw.split(' ')
-        let cmd = args[0]
+    if (trimmedContent.indexOf(config.prefix) === 0) {
+        let argsRaw = trimmedContent.substring(config.prefix.length).trim()
+        let [cmd, ...args] = argsRaw.split(' ')
+        cmd = cmd.toLowerCase()
 
-        switch (cmd) {
-            case 'ping':
-                channel.send('boop')
-                break
-            case 'about':
-                channel.send('I am beppe-bot v0.1')
-                break
+        if (cmd === 'ping') {
+            channel.send('boop')
+        } else if (cmd === 'about') {
+            channel.send(`I am beppe-bot v${version}`)
+        } else if (cmd === 'analysis') {
+            let kowalski = new discord.Attachment('https://i.ytimg.com/vi/jSaMm1lK_j8/maxresdefault.jpg')
+            channel.send(kowalski)
+        } else if (cmd === 'bulkdelete' || cmd === 'purge') {
+            if (isAdmin(member)) {
+                if (isNaN(args[0])) {
+                    channel.send(':no_entry_sign: You need to enter a number of messages to delete!')
+                } else {
+                    channel.bulkDelete(parseInt(args[0]) + 1)
+                }
+            } else {
+                channel.send(':no_entry_sign: You have insufficient permissions for this command')
+            }
+        } else if (cmd === 'set') {
+            if (isAdmin(member)) {
+                if (!args[0]) {
+                    channel.send(':no_entry_sign: You need to enter a key to edit!')
+                } else if (!args[1]) {
+                    channel.send(':no_entry_sign: You need to enter a value!')
+                } else {
+                    config[args[0]] = args[1]
+                    fs.writeFile('./config.json', JSON.stringify(config), function () {
+                        channel.send(`Changed ${args[0]} to ${args[1]}`)
+                    })
+                }
+            } else {
+                channel.send(':no_entry_sign: You have insufficient permissions for this command')
+            }
+        } else {
+            channel.send(`Invalid command \`${cmd}\``)
         }
     }
 })
 
-let joinMsgChannel = '536261976200839211'
+// Welcome/goodbye messages
 client.on('guildMemberAdd', member => {
-    member.guild.channels.get(joinMsgChannel).send(`Welcome <@${member.id}>`)
-    member.guild.channel
-    member.addRole('fella') // TODO: customizable default role
+    member.guild.channels.get(config.welcomeChannel).send(`Welcome <@${member.id}>`)
+    member.addRole(config.firstRole) // TODO: customizable default role
 })
 client.on('guildMemberRemove', member => {
-    member.guild.channels.get(joinMsgChannel).send(`${member.user.username} has left the server`)
-    member.addRole('fella') // TODO: customizable default role
+    member.guild.channels.get(config.welcomeChannel).send(`${member.user.username} has left the server`)
 })
 
 let stdin = process.openStdin();
@@ -48,10 +79,11 @@ let chatting = {
     channel: 426099086047969287,
 }
 
-function sendMsg(guild, channel, content) {
-    client.guilds.get(guild).channels.get(channel).send(content)
+function sendMsg(channel, content) {
+    client.channels.get(channel).send(content)
 }
 
+// Commandline commands
 stdin.addListener('data', data => {
     // Todo: add a GUI to the node-instance
     let msg = data.toString()
@@ -64,22 +96,26 @@ stdin.addListener('data', data => {
             console.log("No longer chatting")
             return
         }
-        sendMsg(chatting.guild, chatting.channel, msg)
+        sendMsg(chatting.channel, msg)
     } else if (id == "chat") {
-        let [guild, channel] = msg.match(/(\d+):(\d+)/g)[0].split(":")
-        chatting.guild = guild
+        let [guild, channel] = msg.match(/(\d*):(\d*)/g)[0].split(":")
         chatting.channel = channel
         chatting.state = true
 
         console.log("You are now chatting")
     } else if (id == "msg") {
-        let [guild, channel] = msg.match(/(\d+):(\d+)/g)[0].split(":")
-        let content = msg.slice(msg.indexOf("=") + 1)
+        let [guild, channel] = msg.match(/(\d+):(\d+)/g)[0].split(":"),
+            content = msg.slice(msg.indexOf("=") + 1)
 
-        sendMsg("426099086047969283", "426099086047969287", content)
+        sendMsg(channel, content)
+    } else if (id == "servers") {
+        console.log("Currently connected to:")
+        console.log(client.guilds.map(g => `${g.id} ${g.name}`).join("\n"))
     }
 });
 
-client.login(auth.token);
+client.login(config.token);
+
+console.log(`Hello and welcome to beppe-bot version ${version}`)
 
 // https://discordapp.com/oauth2/authorize?client_id=431035746099658772&scope=bot&permissions=8
