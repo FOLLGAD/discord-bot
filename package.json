@@ -1,0 +1,17 @@
+{
+  "name": "discord-bot",
+  "version": "0.0.1",
+  "description": "My first discord bot",
+  "main": "bot.js",
+  "scripts": {},
+  "keywords": [
+    "discord",
+    "js",
+    "bot"
+  ],
+  "author": "Emil Ahlbäck",
+  "license": "ISC",
+  "dependencies": {
+    "discord.js": "^11.4.2"
+  }
+}
