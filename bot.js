@@ -1,7 +1,11 @@
-const version = '0.1'
+const version = '0.2'
 
+// Import packages
 const discord = require('discord.js')
+const vm2 = require('vm2')
 const fs = require('fs')
+
+// Load configs
 let config = require('./config.json')
 let { token } = require('./auth.json')
 
@@ -22,17 +26,43 @@ let allowedConfigs = [
     'firstRole',
 ]
 
-client.on('message', message => {
-    let { content, channel, member } = message
+function parseSnowflake(str) {
+    let snowflakeReg = /<@\d+>/g
+    let snow = snowflakeReg.exec(str)
+    if (snow[1]) {
+        return snow[1]
+        // Snowflake
+    } else if (str.match(/^\d+$/g)) {
+        return str
+    } else {
+        return null
+    }
+}
 
-    let trimmedContent = content.trim()
-    if (trimmedContent.indexOf(config.prefix) === 0) {
+function getMember(guild, str) {
+    let id = parseMember(str)
+    if (id) {
+        let member = guild.members.get(id)
+        if (member) {
+            return member
+        }
+    }
+}
+
+client.on('message', message => {
+    let { content, channel, guild, member } = message
+
+    let trimmedContent = content.trimLeft()
+    if (trimmedContent.indexOf(config.prefix) === 0 || trimmedContent.indexOf(`<@${client.user.id}>`) === 0) {
         let argsRaw = trimmedContent.substring(config.prefix.length).trim()
         let [cmd, ...args] = argsRaw.split(' ')
         cmd = cmd.toLowerCase()
 
         if (cmd === 'ping') {
             channel.send('boop')
+        } else if (cmd === 'meme') {
+            let randomMeme = new discord.Attachment('https://cdn.discordapp.com/attachments/536262351423537162/536264377985269781/1520541096839.jpg')
+            channel.send(randomMeme)
         } else if (cmd === 'about') {
             channel.send(`I am beppe-bot v${version}`)
         } else if (cmd === 'analysis') {
@@ -56,6 +86,8 @@ client.on('message', message => {
             } else {
                 channel.send(`Can't praise ${args[0]}, must praise **sheldon**`)
             }
+        } else if (cmd === 'this' && args.join(' ').toLowerCase() === 'is epic') {
+            channel.send('This is epic indeed')
         } else if (cmd === 'get') {
             if (isAdmin(member)) {
                 if (!args[0]) {
@@ -72,13 +104,47 @@ client.on('message', message => {
             if (isAdmin(member)) {
                 if (!args[0]) {
                     channel.send(':no_entry_sign: You need to enter a key to edit!')
-                } else if (!args[1]) {
+                } else if (!value) {
                     channel.send(':no_entry_sign: You need to enter a value!')
+                } else if (args[0] == 'username') {
+                    client.user.setUsername(value)
+                    channel.send(`Changed username`)
+                } else if (args[0] == 'avatar') {
+                    client.user.setAvatar(value)
+                    channel.send(`Changed avatar`)
                 } else {
                     config[args[0]] = value
                     fs.writeFile('./config.json', JSON.stringify(config), function () {
-                        channel.send(`Changed *${args[0]}* to **${value}**`)
+                        channel.send(`Changed **${args[0]}** to *${value}*`)
                     })
+                }
+            } else {
+                channel.send(':no_entry_sign: You have insufficient permissions for this command')
+            }
+        } else if (cmd === 'admin') {
+            if (isAdmin(member)) {
+                let member = guild.members.get(args[1])
+                if (!member) {
+                    channel.send(`Member **${args[1]}** not found`)
+                }
+                if (args[0] === 'add') {
+                    member.addRole(config.adminRoles[0])
+                    channel.send(`Set **${member.nickname}** to admin`)
+                } else if (args[0] === 'remove') {
+                    member.removeRole(config.adminRoles[0])
+                    channel.send(`Removed **${member.nickname}** from admin`)
+                }
+            } else {
+                channel.send(':no_entry_sign: You have insufficient permissions for this command')
+            }
+        } else if (cmd === 'eval') {
+            if (isAdmin(member)) {
+                try {
+                    let vm = new vm2.VM()
+                    let response = '' + vm.run(args.join(' '))
+                    channel.send(response)
+                } catch (error) {
+                    channel.send('Error', error)
                 }
             } else {
                 channel.send(':no_entry_sign: You have insufficient permissions for this command')
@@ -91,11 +157,11 @@ client.on('message', message => {
 
 // Welcome/goodbye messages
 client.on('guildMemberAdd', member => {
-    member.guild.channels.get(config.welcomeChannel).send(`Welcome <@${member.id}>`)
+    member.guild.channels.get(config.welcomechannel).send(`Welcome <@${member.id}>`)
     member.addRole(config.firstRole) // TODO: customizable default role
 })
 client.on('guildMemberRemove', member => {
-    member.guild.channels.get(config.welcomeChannel).send(`${member.user.username} has left the server`)
+    member.guild.channels.get(config.welcomechannel).send(`${member.user.username} has left the server`)
 })
 
 let stdin = process.openStdin();

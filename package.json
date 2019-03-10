@@ -12,6 +12,7 @@
   "author": "Emil Ahlbäck",
   "license": "ISC",
   "dependencies": {
-    "discord.js": "^11.4.2"
+    "discord.js": "^11.4.2",
+    "vm2": "^3.6.10"
   }
 }
