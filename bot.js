@@ -3,6 +3,7 @@ const version = '0.1'
 const discord = require('discord.js')
 const fs = require('fs')
 let config = require('./config.json')
+let { token } = require('./auth.json')
 
 // Initialize discord client
 const client = new discord.Client()
@@ -14,6 +15,12 @@ client.on('ready', () => {
 function isAdmin(member) {
     return config.adminRoles.some(role => member.roles.has(role))
 }
+
+let allowedConfigs = [
+    'prefix',
+    'welcomeChannel',
+    'firstRole',
+]
 
 client.on('message', message => {
     let { content, channel, member } = message
@@ -41,16 +48,36 @@ client.on('message', message => {
             } else {
                 channel.send(':no_entry_sign: You have insufficient permissions for this command')
             }
+        } else if (cmd === 'praise') {
+            if (!args[0]) {
+                channel.send('Enter something to praise')
+            } else if (args[0].toLowerCase() === 'sheldon') {
+                channel.send(":shelpray: He has been praised :shelpray:")
+            } else {
+                channel.send(`Can't praise ${args[0]}, must praise **sheldon**`)
+            }
+        } else if (cmd === 'get') {
+            if (isAdmin(member)) {
+                if (!args[0]) {
+                    channel.send(`:no_entry_sign: You need to enter a key to get. \nPossible keys are: \n${allowedConfigs.map(d => "`" + d + "`").join(", ")}`)
+                } else {
+                    let value = config[args[0]]
+                    channel.send(`*${args[0]}* is set to **${value}**`)
+                }
+            } else {
+                channel.send(':no_entry_sign: You have insufficient permissions for this command')
+            }
         } else if (cmd === 'set') {
+            let value = args.slice(1).join(" ")
             if (isAdmin(member)) {
                 if (!args[0]) {
                     channel.send(':no_entry_sign: You need to enter a key to edit!')
                 } else if (!args[1]) {
                     channel.send(':no_entry_sign: You need to enter a value!')
                 } else {
-                    config[args[0]] = args[1]
+                    config[args[0]] = value
                     fs.writeFile('./config.json', JSON.stringify(config), function () {
-                        channel.send(`Changed ${args[0]} to ${args[1]}`)
+                        channel.send(`Changed *${args[0]}* to **${value}**`)
                     })
                 }
             } else {
@@ -114,7 +141,7 @@ stdin.addListener('data', data => {
     }
 });
 
-client.login(config.token);
+client.login(token);
 
 console.log(`Hello and welcome to beppe-bot version ${version}`)
 
