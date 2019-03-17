@@ -1,13 +1,14 @@
-const version = '0.2'
+const version = '0.4'
 
 // Import packages
 const discord = require('discord.js')
+const fetch = require('node-fetch')
 const vm2 = require('vm2')
 const fs = require('fs')
 
 // Load configs
 let config = require('./config.json')
-let { token } = require('./auth.json')
+let { token, imgur } = require('./auth.json')
 
 // Initialize discord client
 const client = new discord.Client()
@@ -49,109 +50,134 @@ function getMember(guild, str) {
     }
 }
 
-client.on('message', message => {
-    let { content, channel, guild, member } = message
+function handleCommand({ channel, guild, member }, command) {
+    let [cmd, ...args] = command.split(/ +/g)
+    cmd = cmd.toLowerCase()
 
-    let trimmedContent = content.trimLeft()
-    if (trimmedContent.indexOf(config.prefix) === 0 || trimmedContent.indexOf(`<@${client.user.id}>`) === 0) {
-        let argsRaw = trimmedContent.substring(config.prefix.length).trim()
-        let [cmd, ...args] = argsRaw.split(' ')
-        cmd = cmd.toLowerCase()
-
-        if (cmd === 'ping') {
-            channel.send('boop')
-        } else if (cmd === 'meme') {
-            let randomMeme = new discord.Attachment('https://cdn.discordapp.com/attachments/536262351423537162/536264377985269781/1520541096839.jpg')
-            channel.send(randomMeme)
-        } else if (cmd === 'about') {
-            channel.send(`I am beppe-bot v${version}`)
-        } else if (cmd === 'analysis') {
-            let kowalski = new discord.Attachment('https://i.ytimg.com/vi/jSaMm1lK_j8/maxresdefault.jpg')
-            channel.send(kowalski)
-        } else if (cmd === 'bulkdelete' || cmd === 'purge') {
-            if (isAdmin(member)) {
-                if (isNaN(args[0])) {
-                    channel.send(':no_entry_sign: You need to enter a number of messages to delete!')
+    if (cmd === 'ping') {
+        channel.send('boop')
+    } else if (cmd === 'meme') {
+        let randomMeme = new discord.Attachment('https://cdn.discordapp.com/attachments/536262351423537162/536264377985269781/1520541096839.jpg')
+        channel.send(randomMeme)
+    } else if (cmd === 'doggo' || cmd === 'dog') {
+        fetch('https://api.imgur.com/3/album/rjpOa3A', {
+            headers: {
+                'Authorization': `Client-ID ${imgur.id}`
+            }
+        })
+            .then(data => data.json())
+            .then(res => {
+                let meme = res.data.images[Math.random() * res.data.images.length | 0].link
+                if (meme) {
+                    let randomDog = new discord.Attachment(res.data.images[Math.random() * res.data.images.length | 0].link)
+                    channel.send(randomDog)
                 } else {
-                    channel.bulkDelete(parseInt(args[0]) + 1)
+                    throw "couldnt fetch"
                 }
+            })
+            .catch(error => {
+                channel.send("Couldn't fetch doggo")
+                console.error(error)
+            })
+    } else if (cmd === 'about') {
+        channel.send(`I am beppe-bot v${version}`)
+    } else if (cmd === 'analysis') {
+        let kowalski = new discord.Attachment('https://i.ytimg.com/vi/jSaMm1lK_j8/maxresdefault.jpg')
+        channel.send(kowalski)
+    } else if (cmd === 'bulkdelete' || cmd === 'purge') {
+        if (isAdmin(member)) {
+            if (isNaN(args[0])) {
+                channel.send(':no_entry_sign: You need to enter a number of messages to delete!')
             } else {
-                channel.send(':no_entry_sign: You have insufficient permissions for this command')
-            }
-        } else if (cmd === 'praise') {
-            if (!args[0]) {
-                channel.send('Enter something to praise')
-            } else if (args[0].toLowerCase() === 'sheldon') {
-                channel.send(":shelpray: He has been praised :shelpray:")
-            } else {
-                channel.send(`Can't praise ${args[0]}, must praise **sheldon**`)
-            }
-        } else if (cmd === 'this' && args.join(' ').toLowerCase() === 'is epic') {
-            channel.send('This is epic indeed')
-        } else if (cmd === 'get') {
-            if (isAdmin(member)) {
-                if (!args[0]) {
-                    channel.send(`:no_entry_sign: You need to enter a key to get. \nPossible keys are: \n${allowedConfigs.map(d => "`" + d + "`").join(", ")}`)
-                } else {
-                    let value = config[args[0]]
-                    channel.send(`*${args[0]}* is set to **${value}**`)
-                }
-            } else {
-                channel.send(':no_entry_sign: You have insufficient permissions for this command')
-            }
-        } else if (cmd === 'set') {
-            let value = args.slice(1).join(" ")
-            if (isAdmin(member)) {
-                if (!args[0]) {
-                    channel.send(':no_entry_sign: You need to enter a key to edit!')
-                } else if (!value) {
-                    channel.send(':no_entry_sign: You need to enter a value!')
-                } else if (args[0] == 'username') {
-                    client.user.setUsername(value)
-                    channel.send(`Changed username`)
-                } else if (args[0] == 'avatar') {
-                    client.user.setAvatar(value)
-                    channel.send(`Changed avatar`)
-                } else {
-                    config[args[0]] = value
-                    fs.writeFile('./config.json', JSON.stringify(config), function () {
-                        channel.send(`Changed **${args[0]}** to *${value}*`)
-                    })
-                }
-            } else {
-                channel.send(':no_entry_sign: You have insufficient permissions for this command')
-            }
-        } else if (cmd === 'admin') {
-            if (isAdmin(member)) {
-                let member = guild.members.get(args[1])
-                if (!member) {
-                    channel.send(`Member **${args[1]}** not found`)
-                }
-                if (args[0] === 'add') {
-                    member.addRole(config.adminRoles[0])
-                    channel.send(`Set **${member.nickname}** to admin`)
-                } else if (args[0] === 'remove') {
-                    member.removeRole(config.adminRoles[0])
-                    channel.send(`Removed **${member.nickname}** from admin`)
-                }
-            } else {
-                channel.send(':no_entry_sign: You have insufficient permissions for this command')
-            }
-        } else if (cmd === 'eval') {
-            if (isAdmin(member)) {
-                try {
-                    let vm = new vm2.VM()
-                    let response = '' + vm.run(args.join(' '))
-                    channel.send(response)
-                } catch (error) {
-                    channel.send('Error', error)
-                }
-            } else {
-                channel.send(':no_entry_sign: You have insufficient permissions for this command')
+                channel.bulkDelete(parseInt(args[0]) + 1)
             }
         } else {
-            channel.send(`Invalid command \`${cmd}\``)
+            channel.send(':no_entry_sign: You have insufficient permissions for this command')
         }
+    } else if (cmd === 'praise') {
+        if (!args[0]) {
+            channel.send('Enter something to praise')
+        } else if (args[0].toLowerCase() === 'sheldon') {
+            channel.send(":shelpray: He has been praised :shelpray:")
+        } else {
+            channel.send(`Can't praise ${args[0]}, must praise **sheldon**`)
+        }
+    } else if (cmd === 'this' && args.join(' ').toLowerCase() === 'is epic') {
+        channel.send('This is epic indeed')
+    } else if (cmd === 'get') {
+        if (isAdmin(member)) {
+            if (!args[0]) {
+                channel.send(`:no_entry_sign: You need to enter a key to get. \nPossible keys are: \n${allowedConfigs.map(d => "`" + d + "`").join(", ")}`)
+            } else {
+                let value = config[args[0]]
+                channel.send(`*${args[0]}* is set to **${value}**`)
+            }
+        } else {
+            channel.send(':no_entry_sign: You have insufficient permissions for this command')
+        }
+    } else if (cmd === 'set') {
+        let value = args.slice(1).join(" ")
+        if (isAdmin(member)) {
+            if (!args[0]) {
+                channel.send(':no_entry_sign: You need to enter a key to edit!')
+            } else if (!value) {
+                channel.send(':no_entry_sign: You need to enter a value!')
+            } else if (args[0] == 'username') {
+                client.user.setUsername(value)
+                channel.send(`Changed username`)
+            } else if (args[0] == 'avatar') {
+                client.user.setAvatar(value)
+                channel.send(`Changed avatar`)
+            } else {
+                config[args[0]] = value
+                fs.writeFile('./config.json', JSON.stringify(config), function () {
+                    channel.send(`Changed **${args[0]}** to *${value}*`)
+                })
+            }
+        } else {
+            channel.send(':no_entry_sign: You have insufficient permissions for this command')
+        }
+    } else if (cmd === 'admin') {
+        if (isAdmin(member)) {
+            let member = guild.members.get(args[1])
+            if (!member) {
+                channel.send(`Member **${args[1]}** not found`)
+            }
+            if (args[0] === 'add') {
+                member.addRole(config.adminRoles[0])
+                channel.send(`Set **${member.nickname}** to admin`)
+            } else if (args[0] === 'remove') {
+                member.removeRole(config.adminRoles[0])
+                channel.send(`Removed **${member.nickname}** from admin`)
+            }
+        } else {
+            channel.send(':no_entry_sign: You have insufficient permissions for this command')
+        }
+    } else if (cmd === 'eval') {
+        if (isAdmin(member)) {
+            try {
+                let vm = new vm2.VM()
+                let response = '' + vm.run(args.join(' '))
+                channel.send(response)
+            } catch (error) {
+                channel.send('Error', error)
+            }
+        } else {
+            channel.send(':no_entry_sign: You have insufficient permissions for this command')
+        }
+    } else {
+        channel.send(`Invalid command \`${cmd}\``)
+    }
+}
+
+client.on('message', message => {
+    let { content } = message
+    let trimmedContent = content.trimLeft()
+    
+    if (trimmedContent.toLowerCase().indexOf(config.prefix.toLowerCase()) === 0) {
+        handleCommand(message, trimmedContent.slice(config.prefix.length).trimLeft())
+    } else if (trimmedContent.indexOf(`<@${client.user.id}>`) === 0) {
+        handleCommand(message, trimmedContent.slice(`<@${client.user.id}>`.length).trimLeft())
     }
 })
 
